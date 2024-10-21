@@ -155,6 +155,7 @@ func (auth *Auth) login(w http.ResponseWriter, r *http.Request) {
 		log.Printf("FAILED TO READ BODY.[ERROR]:%s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		http.Error(w, "FAILED TO READ BODY", http.StatusInternalServerError)
+		return
 	}
 	var loginInfo LoginInfo
 	err = json.Unmarshal(bodyByte, &loginInfo)
@@ -162,9 +163,57 @@ func (auth *Auth) login(w http.ResponseWriter, r *http.Request) {
 		log.Printf("FAILED TO READ BODY.[ERROR]:%s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		http.Error(w, "FAILED TO READ BODY", http.StatusInternalServerError)
+		return
 	}
-	if loginInfo.Password == "" {
-		log.Println("info missing")
+	if loginInfo.Password == "" || loginInfo.Email == "" {
+		log.Printf("FAILED TO READ BODY.[ERROR]:%s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "FAILED TO READ BODY", http.StatusInternalServerError)
+		return
 	}
-	w.Write([]byte(`"message":"user reached"`))
+
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, auth.ConnString)
+	defer conn.Close(ctx)
+	query := db.New(conn)
+	user, err := query.GetUserByEmail(ctx, pgtype.Text{String: loginInfo.Email, Valid: true})
+	password := []byte(loginInfo.Password)
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password.String), password)
+	if err != nil {
+		log.Printf("FAILED TO LOGIN INVALID PASSWORD}.[ERROR]:%s", err)
+		w.WriteHeader(http.StatusNotFound)
+		http.Error(w, "INVALID PASSWORD", http.StatusNotFound)
+		return
+	}
+	uuidValue, err := user.ID.UUIDValue()
+	if err != nil {
+		log.Printf("FAILED TO CREATE USER.[ERROR]:%s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "SOMETHING WENT WRONG", http.StatusInternalServerError)
+		return
+	}
+	uuidBytes := uuidValue.Bytes
+	var uuidObj uuid.UUID
+	copy(uuidObj[:], uuidBytes[:])
+
+	response := CreateResponse{ID: uuidObj.String(), Email: user.Email.String, Name: user.Name.String}
+	res, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("FAILED TO PARSE BODY.[ERROR]:%s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "SOMETHING WENT WRONG", http.StatusInternalServerError)
+		return
+	}
+
+	cookie := http.Cookie{
+		Name:     "session",
+		Value:    string(res),
+		MaxAge:   3600,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	http.SetCookie(w, &cookie)
+	w.WriteHeader(http.StatusOK)
+	w.Write(res)
 }
