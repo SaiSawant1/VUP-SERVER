@@ -36,10 +36,6 @@ type LoginInfo struct {
 	Password string `json:"password"`
 }
 
-func (auth *Auth) setHeader(w *http.ResponseWriter) {
-	(*w).Header().Set("Content-Type", "application/json")
-}
-
 func (auth *Auth) HandleAuth(r *mux.Router) {
 	r.HandleFunc("/auth/login", auth.login).Methods("POST")
 	r.HandleFunc("/auth/sign-up", auth.signup).Methods("POST")
@@ -52,6 +48,7 @@ func (auth *Auth) signup(w http.ResponseWriter, r *http.Request) {
 		log.Printf("FAILED TO READ BODY.[ERROR]:%s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		http.Error(w, "FAILED TO READ BODY", http.StatusInternalServerError)
+		return
 	}
 
 	var signupInfo SignupInfo
@@ -83,19 +80,12 @@ func (auth *Auth) signup(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close(ctx)
 	query := db.New(conn)
 
-	// Generate UUID
-	id, err := uuid.NewUUID()
+	pgUUID, err := auth.generateUUID()
 	if err != nil {
-		log.Printf("FAILED TO GENERATE UUID.[ERROR]: %s", err)
+		log.Printf("FAILED TO GENERATE USER ID.[ERROR]:%s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		http.Error(w, "SOMETHING WENT WRONG", http.StatusInternalServerError)
 		return
-	}
-
-	// Assign UUID to pgtype.UUID
-	pgUUID := pgtype.UUID{
-		Bytes: [16]byte(id),
-		Valid: true,
 	}
 
 	newUser, err := query.CreateUser(ctx, db.CreateUserParams{
@@ -129,22 +119,18 @@ func (auth *Auth) signup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "SOMETHING WENT WRONG", http.StatusInternalServerError)
 		return
 	}
-
-	w.Write(bytes)
-}
-
-func (auth *Auth) hashPassword(password string) (string, error) {
-
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
+	cookie := http.Cookie{
+		Name:     "session",
+		Value:    string(bytes),
+		MaxAge:   3600,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
+		HttpOnly: true,
 	}
 
-	return string(bytes), nil
-}
+	http.SetCookie(w, &cookie)
 
-func (auth *Auth) parseID() {
-
+	w.Write(bytes)
 }
 
 // user login
@@ -198,7 +184,7 @@ func (auth *Auth) login(w http.ResponseWriter, r *http.Request) {
 	copy(uuidObj[:], uuidBytes[:])
 
 	response := CreateResponse{ID: uuidObj.String(), Email: user.Email.String, Name: user.Name.String}
-	res, err := json.Marshal(response)
+	bytes, err := json.Marshal(response)
 	if err != nil {
 		log.Printf("FAILED TO PARSE BODY.[ERROR]:%s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -208,12 +194,48 @@ func (auth *Auth) login(w http.ResponseWriter, r *http.Request) {
 
 	cookie := http.Cookie{
 		Name:     "session",
-		Value:    string(res),
+		Value:    string(bytes),
 		MaxAge:   3600,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
+		HttpOnly: true,
 	}
 
 	http.SetCookie(w, &cookie)
 	w.WriteHeader(http.StatusOK)
-	w.Write(res)
+	w.Write(bytes)
+}
+func (auth *Auth) hashPassword(password string) (string, error) {
+
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	return string(bytes), nil
+}
+
+func (auth *Auth) parseID() {
+
+}
+func (auth *Auth) setHeader(w *http.ResponseWriter) {
+	(*w).Header().Set("Content-Type", "application/json")
+}
+
+func (auth *Auth) generateUUID() (pgtype.UUID, error) {
+
+	//generate UUID
+	id, err := uuid.NewUUID()
+	if err != nil {
+		return pgtype.UUID{}, err
+	}
+
+	//assign uuid to pgtype.UUID
+	pgUUID := pgtype.UUID{
+		Bytes: [16]byte(id),
+		Valid: true,
+	}
+
+	return pgUUID, nil
+
 }
