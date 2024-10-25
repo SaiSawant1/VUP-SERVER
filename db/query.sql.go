@@ -17,7 +17,7 @@ INSERT INTO user_account (
 ) VALUES (
   $1, $2, $3, $4
 )
-RETURNING id, name, email, password
+RETURNING id, name, email, password, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -40,12 +40,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (UserAcc
 		&i.Name,
 		&i.Email,
 		&i.Password,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getAllUsers = `-- name: GetAllUsers :one
-SELECT id, name, email, password FROM user_account
+SELECT id, name, email, password, created_at, updated_at FROM user_account
 `
 
 func (q *Queries) GetAllUsers(ctx context.Context) (UserAccount, error) {
@@ -56,12 +58,14 @@ func (q *Queries) GetAllUsers(ctx context.Context) (UserAccount, error) {
 		&i.Name,
 		&i.Email,
 		&i.Password,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-Select id, name, email, password from user_account
+Select id, name, email, password, created_at, updated_at from user_account
 WHERE email = $1
 `
 
@@ -73,6 +77,8 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email pgtype.Text) (UserAc
 		&i.Name,
 		&i.Email,
 		&i.Password,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

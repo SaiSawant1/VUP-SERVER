@@ -9,8 +9,10 @@ import (
 )
 
 type UserAccount struct {
-	ID       pgtype.UUID
-	Name     pgtype.Text
-	Email    pgtype.Text
-	Password pgtype.Text
+	ID        pgtype.UUID
+	Name      pgtype.Text
+	Email     pgtype.Text
+	Password  pgtype.Text
+	CreatedAt pgtype.Timestamp
+	UpdatedAt pgtype.Timestamp
 }
