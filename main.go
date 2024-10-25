@@ -19,7 +19,7 @@ func handleFunc(w http.ResponseWriter, r *http.Request) {
 func main() {
 	err := godotenv.Load("ENVIRONMENT_VARIABLE")
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatalf("Error loading .env fil.[ERROR]:%s", err)
 	}
 	PORT := os.Getenv("PORT")
 	DATABASE_URL := os.Getenv("DATABASE_URL")
