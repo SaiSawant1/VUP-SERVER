@@ -17,7 +17,7 @@ func handleFunc(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	err := godotenv.Load("ENVIRONMENT_VARIABLE")
+	err := godotenv.Load(".ENVIRONMENT_VARIABLE")
 	if err != nil {
 		log.Fatalf("Error loading .env fil.[ERROR]:%s", err)
 	}
